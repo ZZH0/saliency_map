@@ -1,197 +1,216 @@
+//
+//  saliency_map.cpp
+//  test00
+//
+//  Created by takuyayuzawa on 2015/07/09.
+//  Copyright (c) 2015å¹´ takuyayuzawa. All rights reserved.
+//
+
 #include <iostream>
 #include <vector>
 #include <opencv2/opencv.hpp>
-#include <opencv2/opencv_lib.hpp>
 
 using namespace std;
 using namespace cv;
 
-const string path = "C:\\bin_OpenCV\\bin\\workspace\\opencv_test\\test_proj\\Debug\\lena.jpg"; //“ü—Í‰æ‘œ‚ÌƒpƒX
+const string path="/Users/yuzawatakuya/Pictures/20130326.jpg"; //å…¥åŠ›ç”»åƒã®ãƒ‘ã‚¹
 
-const int STEP = 8;
-const int GABOR_R = 8; //ƒKƒ{[ƒ‹ƒJ[ƒlƒ‹‚ÌƒTƒCƒYi”¼Œaj
-const float WEIGHT_I = 0.333f; //‹P“xƒ}ƒbƒv‚Ìd‚İŒW”
-const float WEIGHT_C = 0.333f; //F‘Šƒ}ƒbƒv‚Ìd‚İŒW”
-const float WEIGHT_O = 0.333f; //•ûŒüƒ}ƒbƒv‚Ìd‚İŒW”
+const int STEP=8;
+const int GABOR_R=8; //ã‚¬ãƒœãƒ¼ãƒ«ã‚«ãƒ¼ãƒãƒ«ã®ã‚µã‚¤ã‚ºï¼ˆåŠå¾„ï¼‰
+const float WEIGHT_I=0.333f; //è¼åº¦ãƒãƒƒãƒ—ã®é‡ã¿ä¿‚æ•°
+const float WEIGHT_C=0.333f; //è‰²ç›¸ãƒãƒƒãƒ—ã®é‡ã¿ä¿‚æ•°
+const float WEIGHT_O=0.333f; //æ–¹å‘ãƒãƒƒãƒ—ã®é‡ã¿ä¿‚æ•°
 
-//ƒXƒP[ƒ‹‚ÌˆÙ‚È‚é‚Q‚Â‚Ì‰æ‘œ‚É‚Â‚¢‚Ä "center-surround" ‰‰Z
-Mat operateCenterSurround(const Mat& center, const Mat& surround)
+//ã‚¹ã‚±ãƒ¼ãƒ«ã®ç•°ãªã‚‹ï¼’ã¤ã®ç”»åƒã«ã¤ã„ã¦ "center-surround" æ¼”ç®—ã™ã‚‹
+Mat operateCenterSurround(const Mat& center,const Mat& surround)
 {
-	Mat csmap(center.size(), center.type());
-	resize(surround, csmap, csmap.size()); //surround‰æ‘œ‚ğcenter‰æ‘œ‚Æ“¯ƒTƒCƒY‚ÉŠg‘å
-	csmap = abs(csmap - center);
-	return csmap;
+    Mat csmap(center.size(),center.type());
+    resize(surround,csmap,csmap.size()); //surroundç”»åƒã‚’centerç”»åƒã¨åŒã‚µã‚¤ã‚ºã«æ‹¡å¤§
+    csmap=abs(csmap-center);
+    return csmap;
 }
 
-//Šeíƒsƒ‰ƒ~ƒbƒh‚©‚ç "center-surround" ƒsƒ‰ƒ~ƒbƒh‚ğ\’z
+//å„ç¨®ãƒ”ãƒ©ãƒŸãƒƒãƒ‰ã‹ã‚‰ "center-surround" ãƒ”ãƒ©ãƒŸãƒƒãƒ‰ã‚’æ§‹ç¯‰ã™ã‚‹
 vector<Mat> buildCenterSurroundPyramid(const vector<Mat>& pyramid)
 {
-	//surround=center+delta, center={2,3,4}, delta={3,4} Œv6–‡
-	vector<Mat> cspyr(6);
-	cspyr[0] = operateCenterSurround(pyramid[2], pyramid[5]);
-	cspyr[1] = operateCenterSurround(pyramid[2], pyramid[6]);
-	cspyr[2] = operateCenterSurround(pyramid[3], pyramid[6]);
-	cspyr[3] = operateCenterSurround(pyramid[3], pyramid[7]);
-	cspyr[4] = operateCenterSurround(pyramid[4], pyramid[7]);
-	cspyr[5] = operateCenterSurround(pyramid[4], pyramid[8]);
-	return cspyr;
+    //surround=center+delta, center={2,3,4}, delta={3,4} è¨ˆ6æš
+    vector<Mat> cspyr(6);
+    cspyr[0]=operateCenterSurround(pyramid[2],pyramid[5]);
+    cspyr[1]=operateCenterSurround(pyramid[2],pyramid[6]);
+    cspyr[2]=operateCenterSurround(pyramid[3],pyramid[6]);
+    cspyr[3]=operateCenterSurround(pyramid[3],pyramid[7]);
+    cspyr[4]=operateCenterSurround(pyramid[4],pyramid[7]);
+    cspyr[5]=operateCenterSurround(pyramid[4],pyramid[8]);
+    return cspyr;
 }
 
-//‰æ‘œ‚Ìƒ_ƒCƒiƒ~ƒbƒNƒŒƒ“ƒW‚ğ[0,1]‚É³‹K‰»
+//ç”»åƒã®ãƒ€ã‚¤ãƒŠãƒŸãƒƒã‚¯ãƒ¬ãƒ³ã‚¸ã‚’[0,1]ã«æ­£è¦åŒ–
 void normalizeRange(Mat& image)
 {
-	double minval, maxval;
-	minMaxLoc(image, &minval, &maxval);
-
-	image -= minval;
-	if (minval<maxval)
-		image /= maxval - minval;
+    double minval,maxval;
+    minMaxLoc(image,&minval,&maxval);
+    
+    image-=minval;
+    if(minval<maxval)
+        image/=maxval-minval;
 }
 
-//³‹K‰»‰‰ZqN(E)FƒVƒ“ƒOƒ‹ƒs[ƒN‚Ì‹­’²‚Æƒ}ƒ‹ƒ`ƒs[ƒN‚Ì—}§
-void trimPeaks(Mat& image, int step)
+//æ­£è¦åŒ–æ¼”ç®—å­N(ãƒ»)ï¼šã‚·ãƒ³ã‚°ãƒ«ãƒ”ãƒ¼ã‚¯ã®å¼·èª¿ã¨ãƒãƒ«ãƒãƒ”ãƒ¼ã‚¯ã®æŠ‘åˆ¶
+void trimPeaks(Mat& image,int step)
 {
-	const int w = image.cols;
-	const int h = image.rows;
-
-	const double M = 1.0;
-	normalizeRange(image);
-	double m = 0.0;
-	for (int y = 0; y<h - step; y += step) //’[‚Í(h%step)‚¾‚¯—]‚é
-		for (int x = 0; x<w - step; x += step) //’[‚Í(w%step)‚¾‚¯—]‚é
-		{
-			Mat roi(image, Rect(x, y, step, step));
-			double minval = 0.0, maxval = 0.0;
-			minMaxLoc(roi, &minval, &maxval);
-			m += maxval;
-		}
-	m /= (w / step - (w%step ? 0 : 1))*(h / step - (h%step ? 0 : 1)); //ƒuƒƒbƒN”‚ÅŠ„‚Á‚Ä•½‹Ï‚ğŒvZ
-	image *= (M - m)*(M - m);
+    const int w=image.cols;
+    const int h=image.rows;
+    
+    const double M=1.0;
+    normalizeRange(image);
+    double m=0.0;
+    for(int y=0;y<h-step;y+=step) //ç«¯ã¯(h%step)ã ã‘ä½™ã‚‹
+        for(int x=0;x<w-step;x+=step) //ç«¯ã¯(w%step)ã ã‘ä½™ã‚‹
+        {
+            Mat roi(image,Rect(x,y,step,step));
+            double minval=0.0,maxval=0.0;
+            minMaxLoc(roi,&minval,&maxval);
+            m+=maxval;
+        }
+    m/=(w/step-(w%step?0:1))*(h/step-(h%step?0:1)); //ãƒ–ãƒ­ãƒƒã‚¯æ•°ã§å‰²ã£ã¦å¹³å‡ã‚’è¨ˆç®—
+    image*=(M-m)*(M-m);
 }
 
-//Œ°’˜«ƒ}ƒbƒv‚ğŒvZ‚·‚é
+//é¡•è‘—æ€§ãƒãƒƒãƒ—ã‚’è¨ˆç®—ã™ã‚‹
 Mat calcSaliencyMap(const Mat& image0)
 {
-	const Mat_<Vec3f> image = image0 / 255.0f; //ƒ_ƒCƒiƒ~ƒbƒNƒŒƒ“ƒW‚Ì³‹K‰»
-
-	//ƒKƒ{[ƒ‹ƒJ[ƒlƒ‹‚Ì–‘O¶¬
-	const Size ksize = Size(GABOR_R + 1 + GABOR_R, GABOR_R + 1 + GABOR_R);
-	const double sigma = GABOR_R / CV_PI; //}ƒÎƒĞ‚Ü‚ÅƒTƒ|[ƒg‚·‚é‚æ‚¤‚É’²®
-	const double lambda = GABOR_R + 1; //•Ğ‘¤‚ğ1üŠú‚É’²®
-	const double deg45 = CV_PI / 4.0;
-	Mat gabor000 = getGaborKernel(ksize, sigma, deg45 * 0, lambda, 1.0, 0.0, CV_32F);
-	Mat gabor045 = getGaborKernel(ksize, sigma, deg45 * 1, lambda, 1.0, 0.0, CV_32F);
-	Mat gabor090 = getGaborKernel(ksize, sigma, deg45 * 2, lambda, 1.0, 0.0, CV_32F);
-	Mat gabor135 = getGaborKernel(ksize, sigma, deg45 * 3, lambda, 1.0, 0.0, CV_32F);
-
-	const int NUM_SCALES = 9;
-	vector<Mat> pyramidI(NUM_SCALES); //‹P“xƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramidRG(NUM_SCALES); //F‘ŠRGƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramidBY(NUM_SCALES); //F‘ŠBYƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramid000(NUM_SCALES); //•ûŒü  0‹ƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramid045(NUM_SCALES); //•ûŒü 45‹ƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramid090(NUM_SCALES); //•ûŒü 90‹ƒsƒ‰ƒ~ƒbƒh
-	vector<Mat> pyramid135(NUM_SCALES); //•ûŒü135‹ƒsƒ‰ƒ~ƒbƒh
-
-	//“Á«ƒ}ƒbƒvƒsƒ‰ƒ~ƒbƒh‚Ì\’z
-	Mat scaled = image; //Å‰‚ÌƒXƒP[ƒ‹‚ÍŒ´‰æ‘œ‚Å
-	for (int s = 0; s<NUM_SCALES; ++s)
-	{
-		const int w = scaled.cols;
-		const int h = scaled.rows;
-
-		//‹P“xƒ}ƒbƒv‚Ì¶¬
-		vector<Mat_<float> > colors;
-		split(scaled, colors);
-		Mat_<float> imageI = (colors[0] + colors[1] + colors[2]) / 3.0f;
-		pyramidI[s] = imageI;
-
-		//³‹K‰»rgb’l‚ÌŒvZ
-		double minval, maxval;
-		minMaxLoc(imageI, &minval, &maxval);
-		Mat_<float> r(h, w, 0.0f);
-		Mat_<float> g(h, w, 0.0f);
-		Mat_<float> b(h, w, 0.0f);
-		for (int j = 0; j<h; ++j)
-			for (int i = 0; i<w; ++i)
-			{
-				if (imageI(j, i)<0.1f*maxval) //Å‘åƒs[ƒN‚Ì1/10ˆÈ‰º‚Ì‰æ‘f‚ÍœŠO
-					continue;
-				r(j, i) = colors[2](j, i) / imageI(j, i);
-				g(j, i) = colors[1](j, i) / imageI(j, i);
-				b(j, i) = colors[0](j, i) / imageI(j, i);
-			}
-
-		//F‘Šƒ}ƒbƒv‚Ì¶¬i•‰’l‚Í0‚ÉƒNƒ‰ƒ“ƒvj
-		Mat R = max(0.0f, r - (g + b) / 2);
-		Mat G = max(0.0f, g - (b + r) / 2);
-		Mat B = max(0.0f, b - (r + g) / 2);
-		Mat Y = max(0.0f, (r + g) / 2 - abs(r - g) / 2 - b);
-		pyramidRG[s] = R - G;
-		pyramidBY[s] = B - Y;
-
-		//•ûŒüƒ}ƒbƒv‚Ì¶¬
-		filter2D(imageI, pyramid000[s], -1, gabor000);
-		filter2D(imageI, pyramid045[s], -1, gabor045);
-		filter2D(imageI, pyramid090[s], -1, gabor090);
-		filter2D(imageI, pyramid135[s], -1, gabor135);
-
-		pyrDown(scaled, scaled); //Ÿ‚ÌƒIƒNƒ^[ƒu‚ÉŒü‚¯‚ÄƒXƒP[ƒ‹ƒ_ƒEƒ“
-	}
-
-	//center-surround‰‰Z
-	vector<Mat> cspyrI = buildCenterSurroundPyramid(pyramidI);
-	vector<Mat> cspyrRG = buildCenterSurroundPyramid(pyramidRG);
-	vector<Mat> cspyrBY = buildCenterSurroundPyramid(pyramidBY);
-	vector<Mat> cspyr000 = buildCenterSurroundPyramid(pyramid000);
-	vector<Mat> cspyr045 = buildCenterSurroundPyramid(pyramid045);
-	vector<Mat> cspyr090 = buildCenterSurroundPyramid(pyramid090);
-	vector<Mat> cspyr135 = buildCenterSurroundPyramid(pyramid135);
-
-	//Še“Á«ƒ}ƒbƒv‚É‚Â‚¢‚Ä‘SƒXƒP[ƒ‹‚ğW–ñ
-	Mat_<float> temp(image.size());
-	Mat_<float> conspI(image.size(), 0.0f);
-	Mat_<float> conspC(image.size(), 0.0f);
-	Mat_<float> consp000(image.size(), 0.0f);
-	Mat_<float> consp045(image.size(), 0.0f);
-	Mat_<float> consp090(image.size(), 0.0f);
-	Mat_<float> consp135(image.size(), 0.0f);
-	for (int t = 0; t<int(cspyrI.size()); ++t) //CSƒsƒ‰ƒ~ƒbƒh‚ÌŠe‘w‚É‚Â‚¢‚Ä
-	{
-		//‹P“x“Á’¥ƒ}ƒbƒv‚Ö‚Ì‰ÁZ
-		trimPeaks(cspyrI[t], STEP); resize(cspyrI[t], temp, image.size()); conspI += temp;
-		//F‘Š“Á’¥ƒ}ƒbƒv‚Ö‚Ì‰ÁZ
-		trimPeaks(cspyrRG[t], STEP); resize(cspyrRG[t], temp, image.size()); conspC += temp;
-		trimPeaks(cspyrBY[t], STEP); resize(cspyrBY[t], temp, image.size()); conspC += temp;
-		//•ûŒü“Á’¥ƒ}ƒbƒv‚Ö‚Ì‰ÁZ
-		trimPeaks(cspyr000[t], STEP); resize(cspyr000[t], temp, image.size()); consp000 += temp;
-		trimPeaks(cspyr045[t], STEP); resize(cspyr045[t], temp, image.size()); consp045 += temp;
-		trimPeaks(cspyr090[t], STEP); resize(cspyr090[t], temp, image.size()); consp090 += temp;
-		trimPeaks(cspyr135[t], STEP); resize(cspyr135[t], temp, image.size()); consp135 += temp;
-	}
-	trimPeaks(consp000, STEP);
-	trimPeaks(consp045, STEP);
-	trimPeaks(consp090, STEP);
-	trimPeaks(consp135, STEP);
-	Mat_<float> conspO = consp000 + consp045 + consp090 + consp135;
-
-	//Še“Á«ƒ}ƒbƒv‚ğW–ñ‚µŒ°’˜«ƒ}ƒbƒv‚ğæ“¾
-	trimPeaks(conspI, STEP);
-	trimPeaks(conspC, STEP);
-	trimPeaks(conspO, STEP);
-	Mat saliency = WEIGHT_I*conspI + WEIGHT_C*conspC + WEIGHT_O*conspO;
-	normalizeRange(saliency);
-	return saliency;
+    const Mat_<Vec3f> image=image0/255.0f; //ãƒ€ã‚¤ãƒŠãƒŸãƒƒã‚¯ãƒ¬ãƒ³ã‚¸ã®æ­£è¦åŒ–
+    
+    //ã‚¬ãƒœãƒ¼ãƒ«ã‚«ãƒ¼ãƒãƒ«ã®äº‹å‰ç”Ÿæˆ
+    const Size ksize=Size(GABOR_R+1+GABOR_R,GABOR_R+1+GABOR_R);
+    const double sigma=GABOR_R/CV_PI; //Â±Ï€Ïƒã¾ã§ã‚µãƒãƒ¼ãƒˆã™ã‚‹ã‚ˆã†ã«èª¿æ•´
+    const double lambda=GABOR_R+1; //ç‰‡å´ã‚’1å‘¨æœŸã«èª¿æ•´
+    const double deg45=CV_PI/4.0;
+    Mat gabor000=getGaborKernel(ksize,sigma,deg45*0,lambda,1.0,0.0,CV_32F);
+    Mat gabor045=getGaborKernel(ksize,sigma,deg45*1,lambda,1.0,0.0,CV_32F);
+    Mat gabor090=getGaborKernel(ksize,sigma,deg45*2,lambda,1.0,0.0,CV_32F);
+    Mat gabor135=getGaborKernel(ksize,sigma,deg45*3,lambda,1.0,0.0,CV_32F);
+    
+    const int NUM_SCALES=9;
+    vector<Mat> pyramidI(NUM_SCALES); //è¼åº¦ãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramidRG(NUM_SCALES); //è‰²ç›¸RGãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramidBY(NUM_SCALES); //è‰²ç›¸BYãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramid000(NUM_SCALES); //æ–¹å‘  0Â°ãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramid045(NUM_SCALES); //æ–¹å‘ 45Â°ãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramid090(NUM_SCALES); //æ–¹å‘ 90Â°ãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    vector<Mat> pyramid135(NUM_SCALES); //æ–¹å‘135Â°ãƒ”ãƒ©ãƒŸãƒƒãƒ‰
+    
+    //ç‰¹æ€§ãƒãƒƒãƒ—ãƒ”ãƒ©ãƒŸãƒƒãƒ‰ã®æ§‹ç¯‰
+    Mat scaled=image; //æœ€åˆã®ã‚¹ã‚±ãƒ¼ãƒ«ã¯åŸç”»åƒã§
+    for(int s=0;s<NUM_SCALES;++s)
+    {
+        const int w=scaled.cols;
+        const int h=scaled.rows;
+        
+        //è¼åº¦ãƒãƒƒãƒ—ã®ç”Ÿæˆ
+        vector<Mat_<float> > colors;
+        split(scaled,colors);
+        Mat_<float> imageI=(colors[0]+colors[1]+colors[2])/3.0f;
+        pyramidI[s]=imageI;
+        
+        //æ­£è¦åŒ–rgbå€¤ã®è¨ˆç®—
+        double minval,maxval;
+        minMaxLoc(imageI,&minval,&maxval);
+        Mat_<float> r(h,w,0.0f);
+        Mat_<float> g(h,w,0.0f);
+        Mat_<float> b(h,w,0.0f);
+        for(int j=0;j<h;++j)
+            for(int i=0;i<w;++i)
+            {
+                if(imageI(j,i)<0.1f*maxval) //æœ€å¤§ãƒ”ãƒ¼ã‚¯ã®1/10ä»¥ä¸‹ã®ç”»ç´ ã¯é™¤å¤–
+                    continue;
+                r(j,i)=colors[2](j,i)/imageI(j,i);
+                g(j,i)=colors[1](j,i)/imageI(j,i);
+                b(j,i)=colors[0](j,i)/imageI(j,i);
+            }
+        
+        //è‰²ç›¸ãƒãƒƒãƒ—ã®ç”Ÿæˆï¼ˆè² å€¤ã¯ï¼ã«ã‚¯ãƒ©ãƒ³ãƒ—ï¼‰
+        Mat R=max(0.0f,r-(g+b)/2);
+        Mat G=max(0.0f,g-(b+r)/2);
+        Mat B=max(0.0f,b-(r+g)/2);
+        Mat Y=max(0.0f,(r+g)/2-abs(r-g)/2-b);
+        pyramidRG[s]=R-G;
+        pyramidBY[s]=B-Y;
+        
+        //æ–¹å‘ãƒãƒƒãƒ—ã®ç”Ÿæˆ
+        filter2D(imageI,pyramid000[s],-1,gabor000);
+        filter2D(imageI,pyramid045[s],-1,gabor045);
+        filter2D(imageI,pyramid090[s],-1,gabor090);
+        filter2D(imageI,pyramid135[s],-1,gabor135);
+        
+        pyrDown(scaled,scaled); //æ¬¡ã®ã‚ªã‚¯ã‚¿ãƒ¼ãƒ–ã«å‘ã‘ã¦ã‚¹ã‚±ãƒ¼ãƒ«ãƒ€ã‚¦ãƒ³
+    }
+    
+    //center-surroundæ¼”ç®—
+    vector<Mat> cspyrI=buildCenterSurroundPyramid(pyramidI);
+    vector<Mat> cspyrRG=buildCenterSurroundPyramid(pyramidRG);
+    vector<Mat> cspyrBY=buildCenterSurroundPyramid(pyramidBY);
+    vector<Mat> cspyr000=buildCenterSurroundPyramid(pyramid000);
+    vector<Mat> cspyr045=buildCenterSurroundPyramid(pyramid045);
+    vector<Mat> cspyr090=buildCenterSurroundPyramid(pyramid090);
+    vector<Mat> cspyr135=buildCenterSurroundPyramid(pyramid135);
+    
+    //å„ç‰¹æ€§ãƒãƒƒãƒ—ã«ã¤ã„ã¦å…¨ã‚¹ã‚±ãƒ¼ãƒ«ã‚’é›†ç´„
+    Mat_<float> temp(image.size());
+    Mat_<float> conspI(image.size(),0.0f);
+    Mat_<float> conspC(image.size(),0.0f);
+    Mat_<float> consp000(image.size(),0.0f);
+    Mat_<float> consp045(image.size(),0.0f);
+    Mat_<float> consp090(image.size(),0.0f);
+    Mat_<float> consp135(image.size(),0.0f);
+    for(int t=0;t<int(cspyrI.size());++t) //CSãƒ”ãƒ©ãƒŸãƒƒãƒ‰ã®å„å±¤ã«ã¤ã„ã¦
+    {
+        //è¼åº¦ç‰¹å¾´ãƒãƒƒãƒ—ã¸ã®åŠ ç®—
+        trimPeaks(cspyrI[t],STEP); resize(cspyrI[t],temp,image.size()); conspI+=temp;
+        //è‰²ç›¸ç‰¹å¾´ãƒãƒƒãƒ—ã¸ã®åŠ ç®—
+        trimPeaks(cspyrRG[t],STEP); resize(cspyrRG[t],temp,image.size()); conspC+=temp;
+        trimPeaks(cspyrBY[t],STEP); resize(cspyrBY[t],temp,image.size()); conspC+=temp;
+        //æ–¹å‘ç‰¹å¾´ãƒãƒƒãƒ—ã¸ã®åŠ ç®—
+        trimPeaks(cspyr000[t],STEP); resize(cspyr000[t],temp,image.size()); consp000+=temp;
+        trimPeaks(cspyr045[t],STEP); resize(cspyr045[t],temp,image.size()); consp045+=temp;
+        trimPeaks(cspyr090[t],STEP); resize(cspyr090[t],temp,image.size()); consp090+=temp;
+        trimPeaks(cspyr135[t],STEP); resize(cspyr135[t],temp,image.size()); consp135+=temp;
+    }
+    trimPeaks(consp000,STEP);
+    trimPeaks(consp045,STEP);
+    trimPeaks(consp090,STEP);
+    trimPeaks(consp135,STEP);
+    Mat_<float> conspO=consp000+consp045+consp090+consp135;
+    
+    //å„ç‰¹æ€§ãƒãƒƒãƒ—ã‚’é›†ç´„ã—é¡•è‘—æ€§ãƒãƒƒãƒ—ã‚’å–å¾—
+    trimPeaks(conspI,STEP);
+    trimPeaks(conspC,STEP);
+    trimPeaks(conspO,STEP);
+    Mat saliency=WEIGHT_I*conspI+/*WEIGHT_C*conspC+*/WEIGHT_O*conspO;
+    normalizeRange(saliency);
+    
+    namedWindow("test1", CV_WINDOW_AUTOSIZE);
+    imshow("test1", conspI);
+    waitKey(0);
+    namedWindow("test2", CV_WINDOW_AUTOSIZE);
+    imshow("test2", conspC);
+    waitKey(0);
+    namedWindow("test3", CV_WINDOW_AUTOSIZE);
+    imshow("test3", conspO);
+    waitKey(0);
+    
+    return saliency;
 }
 
 int main()
 {
-	Mat image0 = imread(path);
-	imshow("Image", image0);
-	waitKey();
-
-	Mat saliency = calcSaliencyMap(image0);
-	imshow("saliency", saliency);
-	waitKey();
-	return 0;
+    Mat image0=imread(path);
+    imshow("Image",image0);
+    waitKey();
+    
+    Mat saliency=calcSaliencyMap(image0);
+    imshow("saliency",saliency);
+    //imwrite("aaa/saliency_T2.bmp", saliency);
+    waitKey();
+    return 0;
 }
